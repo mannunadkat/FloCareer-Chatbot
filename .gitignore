@@ -1,0 +1,19 @@
+# Python files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+ENV/
+env/
+
+# Local configuration & credentials
+.env
+
+# Databases
+*.db
+
+# OS files
+.DS_Store
+Thumbs.db
