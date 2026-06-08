@@ -27,6 +27,7 @@ class ChatRequest(BaseModel):
     message: str
     api_key: str = None        # Optional client-supplied key
     provider: str = "gemini"   # "gemini" or "openai"
+    active_category: str = None # Optional client-supplied category context ("1"-"6")
 
 # Strict Anti-Hallucination System Instruction
 SYSTEM_INSTRUCTION = (
@@ -37,6 +38,7 @@ SYSTEM_INSTRUCTION = (
     "to answer the question, you MUST respond EXACTLY with:\n"
     "   'I don't have information about that in the FloCareer knowledge base. "
     "Please reach out to FloCareer support for further assistance.'\n"
+    "   Note: If the query mentions 'FloCareer NIVO' or 'NIVO' and the context mentions 'NIVO' or 'AI Interview Platform (NIVO)', they refer to the same entity, so you DO have relevant information and should answer using the context.\n"
     "3. Do NOT generate, invent, assume, or guess ANY information that is not explicitly present in the provided context.\n"
     "4. Do NOT add extra steps, URLs, email addresses, phone numbers, or contact details unless they appear word-for-word in the context.\n"
     "5. Do NOT combine your general knowledge with the context. Use ONLY the context.\n"
@@ -303,6 +305,7 @@ async def stateless_chat_stream(req: ChatRequest):
         raise HTTPException(status_code=400, detail="Message cannot be empty")
 
     msg = req.message.strip()
+    active_cat = req.active_category
 
     # --- GREETING: Return category menu ---
     if is_greeting(msg):
@@ -317,6 +320,13 @@ async def stateless_chat_stream(req: ChatRequest):
             instant_text_generator(build_category_questions_text(msg)),
             media_type="text/event-stream"
         )
+
+    # --- SUB-QUESTION LETTER: Map letter to the actual query if category context is active ---
+    if active_cat and active_cat in CATEGORIES and len(msg) == 1 and msg.lower().isalpha():
+        letter_idx = ord(msg.lower()) - ord('a')
+        cat_questions = CATEGORIES[active_cat]["questions"]
+        if 0 <= letter_idx < len(cat_questions):
+            msg = cat_questions[letter_idx][1]
 
     # --- NORMAL FLOW: Search RAG ---
     # Search RAG (fetch up to top 2 matches)

@@ -29,6 +29,7 @@ SYSTEM_INSTRUCTION = (
     "to answer the question, you MUST respond EXACTLY with:\n"
     "   'I don't have information about that in the FloCareer knowledge base. "
     "Please reach out to FloCareer support for further assistance.'\n"
+    "   Note: If the query mentions 'FloCareer NIVO' or 'NIVO' and the context mentions 'NIVO' or 'AI Interview Platform (NIVO)', they refer to the same entity, so you DO have relevant information and should answer using the context.\n"
     "3. Do NOT generate, invent, assume, or guess ANY information that is not explicitly present in the provided context.\n"
     "4. Do NOT add extra steps, URLs, email addresses, phone numbers, or contact details unless they appear word-for-word in the context.\n"
     "5. Do NOT combine your general knowledge with the context. Use ONLY the context.\n"
@@ -344,7 +345,7 @@ def main():
                     # Use the search query mapped to this question
                     _, search_query = cat_questions[letter_idx]
                     query = search_query  # Override query for RAG search
-                    active_category = None  # Reset after answering
+                    # Keep active_category so user can pick more from the same menu
 
             # --- NORMAL FLOW: RAG search + LLM/local ---
             # 1. Search RAG (fetch up to top 2 matches)

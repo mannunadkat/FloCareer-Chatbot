@@ -148,6 +148,12 @@ class RAGEngine:
             if lower_q in lower_entry_q or lower_entry_q in lower_q:
                 score += 0.4
 
+            # Boost score for exact case-insensitive question match (ignoring punctuation)
+            clean_q = re.sub(r"[?.,!']", "", lower_q).strip()
+            clean_entry_q = re.sub(r"[?.,!']", "", lower_entry_q).strip()
+            if clean_q == clean_entry_q:
+                score += 1.2
+
             # Boost score for matches in the question specifically
             q_intersection = set(query_tokens).intersection(set(entry["tokens"]))
             score += len(q_intersection) * 0.15
