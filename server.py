@@ -171,6 +171,112 @@ async def stateless_gemini_generator(query: str, api_key: str, context_text: str
 
     yield "data: [DONE]\n\n"
 
+# Categories built from actual knowledge base content
+CATEGORIES = {
+    "1": {
+        "name": "Interview Technical Issues",
+        "questions": [
+            ("Unable to switch on camera", "camera"),
+            ("Unable to switch on microphone", "mic"),
+            ("Not able to find or click on Join button", "join button"),
+            ("Getting blank page in interview room", "blank page"),
+            ("Panel/Candidate not able to hear the voice", "not able to hear voice"),
+            ("Not able to turn on video (though camera is on)", "not able to turn on video"),
+            ("Not able to enable code editor", "code editor"),
+            ("Error code #103 or #104", "103104 issue"),
+        ]
+    },
+    "2": {
+        "name": "Candidate Support",
+        "questions": [
+            ("Candidate unable to open R1/R2 link", "candidate unable to open R2 link"),
+            ("Candidate completed interview but status still shows pending", "candidate completed the interview but status still showing"),
+            ("Interview screen stuck", "interview screen stuck"),
+            ("Candidate didn't receive interview link", "candidate didnt receive interview link"),
+            ("Candidate not joined / no show", "no show"),
+            ("Device check before interview", "device check"),
+        ]
+    },
+    "3": {
+        "name": "Interviewer / Panel Queries",
+        "questions": [
+            ("When will I be paid as an interviewer?", "when will i be paid as an interviewer"),
+            ("How do I join FloCareer as an interviewer?", "how do i join flocareer as an independent interviewer"),
+            ("How do I update my availability?", "how to update availability"),
+            ("Where can I view my interview payments?", "where i can view FE payments"),
+            ("How to find the interview link?", "FE unable to find the interview link"),
+            ("How to edit submitted feedback?", "how to edit submitted feedback"),
+            ("What if I cannot attend a scheduled interview?", "what should i do if i cannot attend a scheduled interview"),
+            ("Duplicate feedback submit error", "feedback submit issue"),
+        ]
+    },
+    "4": {
+        "name": "Recruiter / Dashboard Help",
+        "questions": [
+            ("How to reschedule an interview?", "reschedule"),
+            ("How to cancel an interview?", "cancel"),
+            ("How to upload bulk profiles?", "how to upload bulk profiles"),
+            ("How to delete a candidate profile?", "how to delete a candidate profile"),
+            ("How to download candidate feedback/report?", "how to download feedback"),
+            ("Unable to download feedback", "unable to download feedback"),
+            ("Candidate duplicate profile error", "candidate duplicate profile error"),
+            ("How to close or create a job ID?", "how to close a job id"),
+            ("How to change a requisition ID?", "how to change a requisition id"),
+            ("How to reapply a candidate?", "how to reapply a candidate"),
+            ("Client unable to upload a profile / Error", "client unable to upload a profile"),
+        ]
+    },
+    "5": {
+        "name": "Platform Overview & General",
+        "questions": [
+            ("What is FloCareer?", "what is flocareer"),
+            ("AI-driven vs expert-led interviews — what's the difference?", "difference between ai-driven and expert-led"),
+            ("What roles and skills does FloCareer support?", "what roles and skills does flocareer support"),
+            ("How does FloCareer improve time-to-hire?", "how does flocareer improve time-to-hire"),
+            ("Can FloCareer integrate with my ATS?", "can flocareer integrate with my ats"),
+            ("How does FloCareer keep interviews secure and fair?", "how does flocareer keep interviews secure"),
+            ("Does FloCareer replace internal interview panels?", "does flocareer replace internal interview panels"),
+            ("How do I get started with FloCareer?", "how do i get started with flocareer"),
+        ]
+    },
+    "6": {
+        "name": "Pricing & Plans",
+        "questions": [
+            ("How is Interview-as-a-Service priced?", "how is interview-as-a-service priced"),
+            ("How is the AI Interview Platform priced?", "how is the ai interview platform priced"),
+            ("Can we use both IaaS and AI Interviews under one agreement?", "can we use both"),
+            ("Is there a minimum commitment or long-term contract?", "minimum commitment"),
+            ("Are there any setup fees or hidden charges?", "setup fees or hidden charges"),
+            ("Do you offer pilots or free trials?", "pilots or free trials"),
+            ("Do you offer discounts for volume?", "discounts for volume"),
+            ("Do you store candidate recordings?", "store candidate recordings"),
+        ]
+    },
+}
+
+GREETING_WORDS = {"hi", "hello", "hey", "hola", "yo", "sup", "good morning", "good afternoon",
+                  "good evening", "howdy", "greetings", "hii", "hiii", "heya", "namaste"}
+
+def is_greeting(text):
+    cleaned = text.lower().strip().rstrip("!.,?")
+    return cleaned in GREETING_WORDS
+
+def build_category_menu_text():
+    lines = ["Hey there! 👋 Welcome to FloCareer Support.\n\nYou can ask me anything, or pick a category:\n"]
+    for num, cat in CATEGORIES.items():
+        lines.append(f"{num}. {cat['name']}")
+    lines.append("\nType a number (1-6) or just ask your question directly.")
+    return "\n".join(lines)
+
+def build_category_questions_text(cat_num):
+    cat = CATEGORIES[cat_num]
+    lines = [f"{cat['name']}:\n"]
+    for i, (label, _) in enumerate(cat["questions"]):
+        letter = chr(ord('a') + i)
+        lines.append(f"{letter}. {label}")
+    lines.append(f"\nType a letter (a-{chr(ord('a') + len(cat['questions']) - 1)}) to get the answer, or ask your own question.")
+    return "\n".join(lines)
+
 # Stateless Local SSE Stream Generator
 async def stateless_local_generator(matched_answer: str):
     full_response = matched_answer
@@ -185,14 +291,36 @@ async def stateless_local_generator(matched_answer: str):
         
     yield "data: [DONE]\n\n"
 
+# Instant text SSE generator (for menus — no LLM needed)
+async def instant_text_generator(text: str):
+    yield f"data: {json.dumps({'text': text})}\n\n"
+    yield "data: [DONE]\n\n"
+
 # Public Stateless Stream Endpoint
 @app.post("/api/chat")
 async def stateless_chat_stream(req: ChatRequest):
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty")
 
+    msg = req.message.strip()
+
+    # --- GREETING: Return category menu ---
+    if is_greeting(msg):
+        return StreamingResponse(
+            instant_text_generator(build_category_menu_text()),
+            media_type="text/event-stream"
+        )
+
+    # --- CATEGORY NUMBER: Return sub-questions ---
+    if msg in CATEGORIES:
+        return StreamingResponse(
+            instant_text_generator(build_category_questions_text(msg)),
+            media_type="text/event-stream"
+        )
+
+    # --- NORMAL FLOW: Search RAG ---
     # Search RAG (fetch up to top 2 matches)
-    matches = rag_engine.search_multiple(req.message, limit=2)
+    matches = rag_engine.search_multiple(msg, limit=2)
     
     if matches:
         context_parts = []
@@ -210,14 +338,14 @@ async def stateless_chat_stream(req: ChatRequest):
         effective_api_key = req.api_key or os.environ.get("OPENAI_API_KEY")
         if effective_api_key:
             return StreamingResponse(
-                stateless_openai_generator(req.message, effective_api_key, context_text),
+                stateless_openai_generator(msg, effective_api_key, context_text),
                 media_type="text/event-stream"
             )
     elif provider == "gemini":
         effective_api_key = req.api_key or os.environ.get("GEMINI_API_KEY")
         if effective_api_key:
             return StreamingResponse(
-                stateless_gemini_generator(req.message, effective_api_key, context_text),
+                stateless_gemini_generator(msg, effective_api_key, context_text),
                 media_type="text/event-stream"
             )
             
@@ -226,3 +354,4 @@ async def stateless_chat_stream(req: ChatRequest):
         stateless_local_generator(matched_answer),
         media_type="text/event-stream"
     )
+

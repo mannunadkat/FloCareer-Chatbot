@@ -180,6 +180,112 @@ def stream_gemini_response(api_key, context_text, history, last_query):
         print(f"\n{COLOR_WARNING}Gemini connection failed ({str(e)}). Falling back to offline RAG mode...{COLOR_RESET}")
         return None
 
+
+# Categories built from actual knowledge base content
+CATEGORIES = {
+    "1": {
+        "name": "Interview Technical Issues",
+        "questions": [
+            ("Unable to switch on camera", "camera"),
+            ("Unable to switch on microphone", "mic"),
+            ("Not able to find or click on Join button", "join button"),
+            ("Getting blank page in interview room", "blank page"),
+            ("Panel/Candidate not able to hear the voice", "not able to hear voice"),
+            ("Not able to turn on video (though camera is on)", "not able to turn on video"),
+            ("Not able to enable code editor", "code editor"),
+            ("Error code #103 or #104", "103104 issue"),
+        ]
+    },
+    "2": {
+        "name": "Candidate Support",
+        "questions": [
+            ("Candidate unable to open R1/R2 link", "candidate unable to open R2 link"),
+            ("Candidate completed interview but status still shows pending", "candidate completed the interview but status still showing"),
+            ("Interview screen stuck", "interview screen stuck"),
+            ("Candidate didn't receive interview link", "candidate didnt receive interview link"),
+            ("Candidate not joined / no show", "no show"),
+            ("Device check before interview", "device check"),
+        ]
+    },
+    "3": {
+        "name": "Interviewer / Panel Queries",
+        "questions": [
+            ("When will I be paid as an interviewer?", "when will i be paid as an interviewer"),
+            ("How do I join FloCareer as an interviewer?", "how do i join flocareer as an independent interviewer"),
+            ("How do I update my availability?", "how to update availability"),
+            ("Where can I view my interview payments?", "where i can view FE payments"),
+            ("How to find the interview link?", "FE unable to find the interview link"),
+            ("How to edit submitted feedback?", "how to edit submitted feedback"),
+            ("What if I cannot attend a scheduled interview?", "what should i do if i cannot attend a scheduled interview"),
+            ("Duplicate feedback submit error", "feedback submit issue"),
+        ]
+    },
+    "4": {
+        "name": "Recruiter / Dashboard Help",
+        "questions": [
+            ("How to reschedule an interview?", "reschedule"),
+            ("How to cancel an interview?", "cancel"),
+            ("How to upload bulk profiles?", "how to upload bulk profiles"),
+            ("How to delete a candidate profile?", "how to delete a candidate profile"),
+            ("How to download candidate feedback/report?", "how to download feedback"),
+            ("Unable to download feedback", "unable to download feedback"),
+            ("Candidate duplicate profile error", "candidate duplicate profile error"),
+            ("How to close or create a job ID?", "how to close a job id"),
+            ("How to change a requisition ID?", "how to change a requisition id"),
+            ("How to reapply a candidate?", "how to reapply a candidate"),
+            ("Client unable to upload a profile / Error", "client unable to upload a profile"),
+        ]
+    },
+    "5": {
+        "name": "Platform Overview & General",
+        "questions": [
+            ("What is FloCareer?", "what is flocareer"),
+            ("AI-driven vs expert-led interviews — what's the difference?", "difference between ai-driven and expert-led"),
+            ("What roles and skills does FloCareer support?", "what roles and skills does flocareer support"),
+            ("How does FloCareer improve time-to-hire?", "how does flocareer improve time-to-hire"),
+            ("Can FloCareer integrate with my ATS?", "can flocareer integrate with my ats"),
+            ("How does FloCareer keep interviews secure and fair?", "how does flocareer keep interviews secure"),
+            ("Does FloCareer replace internal interview panels?", "does flocareer replace internal interview panels"),
+            ("How do I get started with FloCareer?", "how do i get started with flocareer"),
+        ]
+    },
+    "6": {
+        "name": "Pricing & Plans",
+        "questions": [
+            ("How is Interview-as-a-Service priced?", "how is interview-as-a-service priced"),
+            ("How is the AI Interview Platform priced?", "how is the ai interview platform priced"),
+            ("Can we use both IaaS and AI Interviews under one agreement?", "can we use both"),
+            ("Is there a minimum commitment or long-term contract?", "minimum commitment"),
+            ("Are there any setup fees or hidden charges?", "setup fees or hidden charges"),
+            ("Do you offer pilots or free trials?", "pilots or free trials"),
+            ("Do you offer discounts for volume?", "discounts for volume"),
+            ("Do you store candidate recordings?", "store candidate recordings"),
+        ]
+    },
+}
+
+GREETING_WORDS = {"hi", "hello", "hey", "hola", "yo", "sup", "good morning", "good afternoon",
+                  "good evening", "howdy", "greetings", "hii", "hiii", "heya", "namaste"}
+
+def is_greeting(text):
+    cleaned = text.lower().strip().rstrip("!.,?")
+    return cleaned in GREETING_WORDS
+
+def show_category_menu():
+    print(f"\n{COLOR_TEXT}Hey there! 👋 Welcome to FloCareer Support.\n")
+    print(f"You can ask me anything, or pick a category:{COLOR_RESET}\n")
+    for num, cat in CATEGORIES.items():
+        print(f"  {COLOR_SUCCESS}{num}.{COLOR_RESET} {cat['name']}")
+    print(f"\n{COLOR_MUTED}Type a number (1-{len(CATEGORIES)}) or just ask your question directly.{COLOR_RESET}")
+
+def show_category_questions(cat_num):
+    cat = CATEGORIES[cat_num]
+    print(f"\n{COLOR_TEXT}{cat['name']}:{COLOR_RESET}\n")
+    for i, (label, _) in enumerate(cat["questions"]):
+        letter = chr(ord('a') + i)
+        print(f"  {COLOR_SUCCESS}{letter}.{COLOR_RESET} {label}")
+    print(f"\n{COLOR_MUTED}Type a letter (a-{chr(ord('a') + len(cat['questions']) - 1)}) to get the answer, or ask your own question.{COLOR_RESET}")
+
 def main():
     os.system("clear" if os.name == "posix" else "cls")
     print(f"{COLOR_PRIMARY}====================================================={COLOR_RESET}")
@@ -202,6 +308,7 @@ def main():
     print(f"{COLOR_PRIMARY}-----------------------------------------------------{COLOR_RESET}\n")
 
     history = []
+    active_category = None  # Track which category menu is currently shown
 
     while True:
         try:
@@ -214,7 +321,32 @@ def main():
                 break
 
             print(f"{COLOR_PRIMARY}FloCareer AI:{COLOR_RESET} ", end="")
-            
+
+            # --- GREETING: Show category menu ---
+            if is_greeting(query):
+                show_category_menu()
+                active_category = None
+                print()
+                continue
+
+            # --- CATEGORY NUMBER: Show questions for that category ---
+            if query.strip() in CATEGORIES:
+                active_category = query.strip()
+                show_category_questions(active_category)
+                print()
+                continue
+
+            # --- SUB-QUESTION LETTER: Answer directly from KB ---
+            if active_category and len(query.strip()) == 1 and query.strip().lower().isalpha():
+                letter_idx = ord(query.strip().lower()) - ord('a')
+                cat_questions = CATEGORIES[active_category]["questions"]
+                if 0 <= letter_idx < len(cat_questions):
+                    # Use the search query mapped to this question
+                    _, search_query = cat_questions[letter_idx]
+                    query = search_query  # Override query for RAG search
+                    active_category = None  # Reset after answering
+
+            # --- NORMAL FLOW: RAG search + LLM/local ---
             # 1. Search RAG (fetch up to top 2 matches)
             matches = rag_engine.search_multiple(query, limit=2)
             
@@ -256,3 +388,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
