@@ -107,8 +107,16 @@ class RAGEngine:
             self.vocabulary.update(q_tokens)
             self.vocabulary.update(a_tokens)
 
-        # Populate ChromaDB if empty
-        if self.collection.count() == 0:
+        # Populate ChromaDB if empty or if count mismatch (to sync KB updates)
+        if self.collection.count() != len(temp_entries):
+            try:
+                # Retrieve all existing IDs to delete them
+                existing = self.collection.get()
+                if existing and existing["ids"]:
+                    self.collection.delete(ids=existing["ids"])
+            except Exception as e:
+                print(f"Warning: Could not clear ChromaDB collection: {e}")
+
             documents = []
             metadatas = []
             ids = []

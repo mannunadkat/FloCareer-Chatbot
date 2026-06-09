@@ -1156,6 +1156,11 @@
 **Unnamed: 1**: The code editor in the interview room is not enabling or loading
 **Unnamed: 2**: Open Chrome Developer Console (F12 > Console tab) before launching the interview room. Check for red error messages in the console. Take a screenshot of any errors and share with the development team. The interview room includes a built-in code compiler and editor — if it fails to load it is a platform-level issue requiring tech team investigation. (Source: FAQ_1.xlsx — FAQS FE driven, Q7; flocareer.com blog — Discover The All New FloCareer Interview Room)
 
+#### Entry 9
+**Unnamed: 0**: 8
+**Unnamed: 1**: How to schedule an interview / How can I schedule an interview?
+**Unnamed: 2**: To schedule an interview, follow these steps: 1. Go to your FloCareer Dashboard. 2. Navigate to Candidates > Upload Profiles or select a Requisition. 3. Fill in the candidate details, upload their CV, and associate them with the desired Requisition ID. 4. Once the profile is uploaded, click the three-dot menu next to the candidate name and select Request Schedule (or Schedule Interview). 5. Select the available date, time, and focus areas, then click Submit to finalize the schedule request. (Source: platform dashboard workflows; flocareer.com/interview-as-a-service — CV Upload step)
+
 
 ---
 
