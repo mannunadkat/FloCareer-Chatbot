@@ -99,11 +99,14 @@ def extract_text_from_chunk(chunk_str):
             return escaped_str.replace('\\n', '\n').replace('\\"', '"').replace('\\\\', '\\')
     return ""
 
-def stream_local_response(matched_answer):
+def stream_local_response(matched_answer, is_correction=False):
     response = matched_answer
     if not response:
         response = "I don't have information about that in the FloCareer knowledge base. Please reach out to FloCareer support for further assistance."
     
+    if is_correction:
+        response = "Apologies for the misunderstanding! " + response
+        
     chunk_size = 5
     for i in range(0, len(response), chunk_size):
         chunk = response[i:i+chunk_size]
@@ -113,7 +116,8 @@ def stream_local_response(matched_answer):
     print()
     return response
 
-def stream_openai_response(api_key, context_text, history, last_query):
+
+def stream_openai_response(api_key, context_text, history, last_query, is_correction=False):
     # Construct conversation history
     messages = [{"role": "system", "content": SYSTEM_INSTRUCTION}]
     
@@ -121,6 +125,8 @@ def stream_openai_response(api_key, context_text, history, last_query):
         messages.append({"role": turn["role"], "content": turn["content"]})
         
     prompt = f"Context:\n{context_text}\n\nQuery: {last_query}"
+    if is_correction:
+        prompt = f"Note: The user is correcting a previous misunderstanding (e.g., they said 'i meant...'). Please start your response by politely apologizing for the misunderstanding (e.g., 'Apologies for the misunderstanding!'), and then provide the correct information.\n\n" + prompt
     messages.append({"role": "user", "content": prompt})
 
     url = "https://api.openai.com/v1/chat/completions"
@@ -167,13 +173,15 @@ def stream_openai_response(api_key, context_text, history, last_query):
         print(f"\n{COLOR_WARNING}OpenAI connection failed ({str(e)}). Falling back to offline RAG mode...{COLOR_RESET}")
         return None
 
-def stream_gemini_response(api_key, context_text, history, last_query):
+def stream_gemini_response(api_key, context_text, history, last_query, is_correction=False):
     contents = []
     for turn in history:
         role = "user" if turn["role"] == "user" else "model"
         contents.append({"role": role, "parts": [{"text": turn["content"]}]})
     
     prompt = f"Context:\n{context_text}\n\nQuery: {last_query}"
+    if is_correction:
+        prompt = f"Note: The user is correcting a previous misunderstanding (e.g., they said 'i meant...'). Please start your response by politely apologizing for the misunderstanding (e.g., 'Apologies for the misunderstanding!'), and then provide the correct information.\n\n" + prompt
     contents.append({"role": "user", "parts": [{"text": prompt}]})
 
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?key={api_key}"
@@ -351,6 +359,26 @@ def is_appreciation(text):
             return True
     return False
 
+def is_correction(text):
+    cleaned = text.lower().strip()
+    patterns = [
+        r"\bi meant\b",
+        r"\bi meant to say\b",
+        r"\bi actually meant\b",
+        r"\bno i meant\b",
+        r"\bnot that\b",
+        r"\bwrong answer\b",
+        r"\byou got it wrong\b",
+        r"\bthat is incorrect\b",
+        r"\bapologize\b",
+        r"\bapology\b",
+        r"\bsorry but\b",
+    ]
+    for pattern in patterns:
+        if re.search(pattern, cleaned):
+            return True
+    return False
+
 def show_category_menu():
     print(f"\n{COLOR_TEXT}Hey there! 👋 Welcome to FloCareer Support.\n")
     print(f"You can ask me anything, or pick a category:{COLOR_RESET}\n")
@@ -433,6 +461,7 @@ def main():
             # --- NORMAL FLOW: RAG search + LLM/local ---
             # Pre-correct spelling typos in query before searching or generating responses
             corrected_query = rag_engine.correct_query(query)
+            is_corr = is_correction(query)
 
             # 1. Search RAG (fetch up to top 2 matches)
             matches = rag_engine.search_multiple(corrected_query, limit=2)
@@ -451,12 +480,12 @@ def main():
             # 3. Call Online APIs if enabled, otherwise fallback to local
             response_text = None
             if openai_key:
-                response_text = stream_openai_response(openai_key, context_text, history, corrected_query)
+                response_text = stream_openai_response(openai_key, context_text, history, corrected_query, is_correction=is_corr)
             elif gemini_key:
-                response_text = stream_gemini_response(gemini_key, context_text, history, corrected_query)
+                response_text = stream_gemini_response(gemini_key, context_text, history, corrected_query, is_correction=is_corr)
             
             if response_text is None:
-                response_text = stream_local_response(matched_answer)
+                response_text = stream_local_response(matched_answer, is_correction=is_corr)
 
             # Update conversation history memory
             history.append({"role": "user", "content": query})

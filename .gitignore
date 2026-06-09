@@ -19,4 +19,4 @@ env/
 Thumbs.db
 
 # Cache files
-.embeddings_cache.json
+chroma_db/

@@ -98,17 +98,20 @@ SYSTEM_INSTRUCTION = (
 )
 
 # Stateless OpenAI SSE Stream Generator
-async def stateless_openai_generator(query: str, api_key: str, context_text: str):
+async def stateless_openai_generator(query: str, api_key: str, context_text: str, is_correction: bool = False):
     url = "https://api.openai.com/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
+    prompt = f"Context:\n{context_text}\n\nQuery: {query}"
+    if is_correction:
+        prompt = f"Note: The user is correcting a previous misunderstanding (e.g., they said 'i meant...'). Please start your response by politely apologizing for the misunderstanding (e.g., 'Apologies for the misunderstanding!'), and then provide the correct information.\n\n" + prompt
     payload = {
         "model": "gpt-4o-mini",
         "messages": [
             {"role": "system", "content": SYSTEM_INSTRUCTION},
-            {"role": "user", "content": f"Context:\n{context_text}\n\nQuery: {query}"}
+            {"role": "user", "content": prompt}
         ],
         "stream": True
     }
@@ -147,13 +150,16 @@ async def stateless_openai_generator(query: str, api_key: str, context_text: str
     yield "data: [DONE]\n\n"
 
 # Stateless Gemini SSE Stream Generator
-async def stateless_gemini_generator(query: str, api_key: str, context_text: str):
+async def stateless_gemini_generator(query: str, api_key: str, context_text: str, is_correction: bool = False):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?key={api_key}"
+    prompt = f"Context:\n{context_text}\n\nQuery: {query}"
+    if is_correction:
+        prompt = f"Note: The user is correcting a previous misunderstanding (e.g., they said 'i meant...'). Please start your response by politely apologizing for the misunderstanding (e.g., 'Apologies for the misunderstanding!'), and then provide the correct information.\n\n" + prompt
     payload = {
         "contents": [
             {
                 "role": "user",
-                "parts": [{"text": f"Context:\n{context_text}\n\nQuery: {query}"}]
+                "parts": [{"text": prompt}]
             }
         ],
         "systemInstruction": {
@@ -343,6 +349,27 @@ def is_appreciation(text):
             return True
     return False
 
+def is_correction(text):
+    import re
+    cleaned = text.lower().strip()
+    patterns = [
+        r"\bi meant\b",
+        r"\bi meant to say\b",
+        r"\bi actually meant\b",
+        r"\bno i meant\b",
+        r"\bnot that\b",
+        r"\bwrong answer\b",
+        r"\byou got it wrong\b",
+        r"\bthat is incorrect\b",
+        r"\bapologize\b",
+        r"\bapology\b",
+        r"\bsorry but\b",
+    ]
+    for pattern in patterns:
+        if re.search(pattern, cleaned):
+            return True
+    return False
+
 def build_category_menu_text():
     lines = ["Hey there! 👋 Welcome to FloCareer Support.\n\nYou can ask me anything, or pick a category:\n"]
     for num, cat in CATEGORIES.items():
@@ -360,10 +387,12 @@ def build_category_questions_text(cat_num):
     return "\n".join(lines)
 
 # Stateless Local SSE Stream Generator
-async def stateless_local_generator(matched_answer: str):
+async def stateless_local_generator(matched_answer: str, is_correction: bool = False):
     full_response = matched_answer
     if not full_response:
         full_response = "I don't have information about that in the FloCareer knowledge base. Please reach out to FloCareer support for further assistance."
+    if is_correction:
+        full_response = "Apologies for the misunderstanding! " + full_response
     
     chunk_size = 5
     for i in range(0, len(full_response), chunk_size):
@@ -418,6 +447,7 @@ async def stateless_chat_stream(req: ChatRequest):
     # --- NORMAL FLOW: Search RAG ---
     # Pre-correct spelling typos in query before searching or generating responses
     corrected_msg = rag_engine.correct_query(msg)
+    is_corr = is_correction(msg)
 
     # Search RAG (fetch up to top 2 matches) using corrected query
     matches = rag_engine.search_multiple(corrected_msg, limit=2)
@@ -438,20 +468,20 @@ async def stateless_chat_stream(req: ChatRequest):
         effective_api_key = req.api_key or os.environ.get("OPENAI_API_KEY")
         if effective_api_key:
             return StreamingResponse(
-                stateless_openai_generator(corrected_msg, effective_api_key, context_text),
+                stateless_openai_generator(corrected_msg, effective_api_key, context_text, is_correction=is_corr),
                 media_type="text/event-stream"
             )
     elif provider == "gemini":
         effective_api_key = req.api_key or os.environ.get("GEMINI_API_KEY")
         if effective_api_key:
             return StreamingResponse(
-                stateless_gemini_generator(corrected_msg, effective_api_key, context_text),
+                stateless_gemini_generator(corrected_msg, effective_api_key, context_text, is_correction=is_corr),
                 media_type="text/event-stream"
             )
             
     # Fallback to local RAG matching stream if no key is configured
     return StreamingResponse(
-        stateless_local_generator(matched_answer),
+        stateless_local_generator(matched_answer, is_correction=is_corr),
         media_type="text/event-stream"
     )
 

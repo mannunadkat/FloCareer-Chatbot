@@ -2,6 +2,8 @@ import os
 import re
 import requests
 import json
+import chromadb
+from chromadb.utils import embedding_functions
 from dotenv import load_dotenv
 
 # Load keys from .env file
@@ -22,66 +24,19 @@ class RAGEngine:
     def __init__(self):
         self.entries = []
         self.vocabulary = set()
+        self.embedding_provider = "sentence-transformers"
         
-        # Detect embedding provider from environment keys
-        openai_key = os.environ.get("OPENAI_API_KEY")
-        gemini_key = os.environ.get("GEMINI_API_KEY")
-        if openai_key:
-            self.embedding_provider = "openai"
-        elif gemini_key:
-            self.embedding_provider = "gemini"
-        else:
-            self.embedding_provider = None
-            
+        # Initialize ChromaDB persistent client and SentenceTransformer EF
+        db_path = os.path.join(os.path.dirname(__file__), "chroma_db")
+        self.chroma_client = chromadb.PersistentClient(path=db_path)
+        self.st_ef = embedding_functions.SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
+        self.collection = self.chroma_client.get_or_create_collection(
+            name="flocareer_faq",
+            embedding_function=self.st_ef,
+            metadata={"hnsw:space": "cosine"}
+        )
+        
         self.load_kb()
-
-    def _get_openai_embedding(self, text, api_key):
-        url = "https://api.openai.com/v1/embeddings"
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "model": "text-embedding-3-small",
-            "input": text
-        }
-        try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=10.0)
-            if resp.status_code == 200:
-                return resp.json()["data"][0]["embedding"]
-            else:
-                print(f"OpenAI Embedding API error (HTTP {resp.status_code}): {resp.text}")
-        except Exception as e:
-            print(f"Error fetching OpenAI embedding: {e}")
-        return None
-
-    def _get_gemini_embedding(self, text, api_key):
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key={api_key}"
-        payload = {
-            "model": "models/text-embedding-004",
-            "content": {
-                "parts": [{"text": text}]
-            }
-        }
-        try:
-            resp = requests.post(url, json=payload, timeout=10.0)
-            if resp.status_code == 200:
-                return resp.json()["embedding"]["values"]
-            else:
-                print(f"Gemini Embedding API error (HTTP {resp.status_code}): {resp.text}")
-        except Exception as e:
-            print(f"Error fetching Gemini embedding: {e}")
-        return None
-
-    def _cosine_similarity(self, v1, v2):
-        if not v1 or not v2:
-            return 0.0
-        dot = sum(x * y for x, y in zip(v1, v2))
-        norm1 = sum(x * x for x in v1) ** 0.5
-        norm2 = sum(x * x for x in v2) ** 0.5
-        if norm1 == 0.0 or norm2 == 0.0:
-            return 0.0
-        return dot / (norm1 * norm2)
 
     def load_kb(self):
         if not os.path.exists(KB_PATH):
@@ -152,55 +107,33 @@ class RAGEngine:
             self.vocabulary.update(q_tokens)
             self.vocabulary.update(a_tokens)
 
-        # Load embeddings cache
-        emb_cache = {}
-        cache_updated = False
-        CACHE_PATH = os.path.join(os.path.dirname(__file__), ".embeddings_cache.json")
-        if self.embedding_provider:
-            if os.path.exists(CACHE_PATH):
-                try:
-                    with open(CACHE_PATH, "r", encoding="utf-8") as cache_f:
-                        emb_cache = json.load(cache_f)
-                except Exception as e:
-                    print(f"Error loading embeddings cache: {e}")
+        # Populate ChromaDB if empty
+        if self.collection.count() == 0:
+            documents = []
+            metadatas = []
+            ids = []
+            for idx, (question, answer) in enumerate(temp_entries):
+                documents.append(question)  # Embed the question text
+                metadatas.append({"question": question, "answer": answer})
+                ids.append(f"faq_{idx}")
+            
+            # Batch add to ChromaDB
+            self.collection.add(
+                documents=documents,
+                metadatas=metadatas,
+                ids=ids
+            )
 
-        # Build entries and attach embeddings
-        api_key = os.environ.get("OPENAI_API_KEY") if self.embedding_provider == "openai" else os.environ.get("GEMINI_API_KEY")
-        
+        # Build local entries (without embeddings attached)
         for question, answer in temp_entries:
             q_tokens = self._tokenize(question, is_query=False)
             a_tokens = self._tokenize(answer, is_query=False)
-            
-            embedding = None
-            if self.embedding_provider and api_key:
-                cache_key = f"{self.embedding_provider}:{question}"
-                if cache_key in emb_cache:
-                    embedding = emb_cache[cache_key]
-                else:
-                    if self.embedding_provider == "openai":
-                        embedding = self._get_openai_embedding(question, api_key)
-                    else:
-                        embedding = self._get_gemini_embedding(question, api_key)
-                    
-                    if embedding:
-                        emb_cache[cache_key] = embedding
-                        cache_updated = True
-
             self.entries.append({
                 "question": question,
                 "answer": answer,
                 "tokens": q_tokens,
-                "answer_tokens": a_tokens,
-                "embedding": embedding
+                "answer_tokens": a_tokens
             })
-
-        # Save cache if updated
-        if cache_updated and self.embedding_provider:
-            try:
-                with open(CACHE_PATH, "w", encoding="utf-8") as cache_f:
-                    json.dump(emb_cache, cache_f)
-            except Exception as e:
-                print(f"Error saving embeddings cache: {e}")
 
     def _damerau_levenshtein_distance(self, s1, s2):
         d = {}
@@ -256,10 +189,30 @@ class RAGEngine:
     def correct_query(self, query):
         words = re.findall(r"\b\w+\b", query)
         
+        manual_corrections = {
+            "vid": "video",
+            "vids": "videos",
+            "mci": "mic",
+            "camra": "camera",
+            "cemra": "camera",
+            "cma": "camera",
+            "intervew": "interview",
+            "interviu": "interview",
+            "schedual": "schedule",
+        }
+        
         corrected_words = []
         for w in words:
             w_lower = w.lower()
-            if w_lower in STOPWORDS or w_lower in self.vocabulary or w_lower.isdigit():
+            if w_lower in manual_corrections:
+                closest = manual_corrections[w_lower]
+                if w.isupper():
+                    corrected_words.append(closest.upper())
+                elif w[0].isupper() if w else False:
+                    corrected_words.append(closest.capitalize())
+                else:
+                    corrected_words.append(closest)
+            elif w_lower in STOPWORDS or w_lower in self.vocabulary or w_lower.isdigit():
                 corrected_words.append(w)
             else:
                 closest = self._find_closest_vocab_word(w_lower)
@@ -344,15 +297,26 @@ class RAGEngine:
         if not query_tokens:
             return []
 
-        # Generate query embedding if provider and keys are active
-        query_embedding = None
-        if self.embedding_provider:
-            api_key = os.environ.get("OPENAI_API_KEY") if self.embedding_provider == "openai" else os.environ.get("GEMINI_API_KEY")
-            if api_key:
-                if self.embedding_provider == "openai":
-                    query_embedding = self._get_openai_embedding(query, api_key)
-                else:
-                    query_embedding = self._get_gemini_embedding(query, api_key)
+        # Query ChromaDB collection for top semantic matches
+        try:
+            chroma_results = self.collection.query(
+                query_texts=[query],
+                n_results=min(10, self.collection.count())
+            )
+        except Exception as e:
+            print(f"ChromaDB query error: {e}")
+            chroma_results = None
+
+        # Map semantic scores
+        semantic_scores = {}
+        if chroma_results and chroma_results["metadatas"] and chroma_results["distances"]:
+            metadatas = chroma_results["metadatas"][0]
+            distances = chroma_results["distances"][0]
+            for meta, dist in zip(metadatas, distances):
+                # distance in cosine space is 1.0 - cosine_similarity
+                similarity = 1.0 - dist
+                question = meta["question"]
+                semantic_scores[question] = similarity
 
         scored_entries = []
 
@@ -360,9 +324,8 @@ class RAGEngine:
             entry_tokens = set(entry["tokens"]).union(set(entry["answer_tokens"]))
             intersection = set(query_tokens).intersection(entry_tokens)
             
-            # If no intersection, but we have semantic search, let cosine similarity decide.
-            # Otherwise, skip.
-            if not intersection and not query_embedding:
+            sem_score = semantic_scores.get(entry["question"], 0.0)
+            if not intersection and sem_score == 0.0:
                 continue
 
             # Calculate Jaccard-like overlap score
@@ -394,14 +357,9 @@ class RAGEngine:
                 if kw in query_tokens and kw in entry_tokens:
                     keyword_score += 0.15
 
-            # Blend with semantic score if available
-            if query_embedding and entry.get("embedding"):
-                semantic_score = self._cosine_similarity(query_embedding, entry["embedding"])
-                # Add semantic boost if similarity is high
-                if semantic_score > 0.4:
-                    score = keyword_score + (semantic_score - 0.4) * 1.5
-                else:
-                    score = keyword_score
+            # Blend with semantic score
+            if sem_score > 0.4:
+                score = keyword_score + (sem_score - 0.4) * 1.5
             else:
                 score = keyword_score
 
