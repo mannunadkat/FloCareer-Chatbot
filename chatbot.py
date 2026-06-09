@@ -39,9 +39,7 @@ SYSTEM_INSTRUCTION = (
     "Always search the knowledge base using the corrected/interpreted query, "
     "not the literal typed text.\n\n"
     "Step 3 — Respond or fallback:\n"
-    "- If the interpreted topic EXISTS in the knowledge base -> answer it normally.\n"
-    "- If you corrected a typo, optionally prefix your answer with:\n"
-    "  \"It looks like you meant [X] — here's what I found:\"\n"
+    "- If the interpreted topic EXISTS in the knowledge base -> answer it normally. Do NOT add any prefix like 'It looks like you meant...' or mention any corrections. Just give the direct answer.\n"
     "- If the interpreted topic does NOT exist in the knowledge base even "
     "after correction -> only then respond with the fallback message.\n\n"
     "IMPORTANT: This rule does NOT allow answering from outside the knowledge "
@@ -455,7 +453,7 @@ def main():
                 print(f"\n{COLOR_PRIMARY}FloCareer AI:{COLOR_RESET} You're welcome! Glad I could help. Let me know if you need anything else! 😊")
                 show_category_menu()
                 print()
-                break
+                continue
 
             print(f"{COLOR_PRIMARY}FloCareer AI:{COLOR_RESET} ", end="")
 
