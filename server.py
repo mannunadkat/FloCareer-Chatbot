@@ -340,14 +340,38 @@ def is_greeting(text):
     return False
 
 def is_appreciation(text):
-    cleaned = text.lower().strip().rstrip("!.,?")
-    appreciation_roots = {"thanks", "thank you", "thank u", "thx", "ty", "tanks", "appreciate", "appreciate it"}
-    for root in appreciation_roots:
-        if cleaned == root or cleaned == f"ok {root}" or cleaned == f"okay {root}" or cleaned == f"perfect {root}" or cleaned == f"great {root}":
-            return True
-        if cleaned in {f"{root} so much", f"{root} very much", f"ok {root} so much", f"okay {root} so much"}:
-            return True
-    return False
+    cleaned = text.lower().strip()
+    
+    appreciation_words = ["thanks", "thank you", "thank u", "thx", "ty", "appreciate"]
+    has_appreciation = any(word in cleaned for word in appreciation_words)
+    if not has_appreciation:
+        return False
+        
+    query_markers = [
+        "?", "how", "why", "when", "where", "what", "who", "which", 
+        "can you", "is there", "are there", "does", "do", "should", "will", "would",
+        "camera", "mic", "microphone", "audio", "video", "volume", 
+        "payment", "salary", "reschedule", "cancel", "delete", "error", "join", "blank"
+    ]
+    
+    has_query = False
+    if "?" in cleaned:
+        has_query = True
+    else:
+        import re
+        words = set(re.findall(r"\b\w+\b", cleaned))
+        for marker in query_markers:
+            if marker in words or marker in cleaned:
+                if " " in marker:
+                    if re.search(r"\b" + re.escape(marker) + r"\b", cleaned):
+                        has_query = True
+                        break
+                else:
+                    if marker in words:
+                        has_query = True
+                        break
+                        
+    return not has_query
 
 def is_correction(text):
     import re
@@ -418,8 +442,9 @@ async def stateless_chat_stream(req: ChatRequest):
 
     # --- APPRECIATION: Exit/polite response ---
     if is_appreciation(msg):
+        menu_text = "You're welcome! Glad I could help. Let me know if you need anything else! 😊\n\n" + build_category_menu_text()
         return StreamingResponse(
-            instant_text_generator("You're welcome! Glad I could help. Let me know if you need anything else! 😊"),
+            instant_text_generator(menu_text),
             media_type="text/event-stream"
         )
 
