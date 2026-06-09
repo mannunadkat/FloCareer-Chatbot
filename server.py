@@ -416,8 +416,11 @@ async def stateless_chat_stream(req: ChatRequest):
             msg = cat_questions[letter_idx][1]
 
     # --- NORMAL FLOW: Search RAG ---
-    # Search RAG (fetch up to top 2 matches)
-    matches = rag_engine.search_multiple(msg, limit=2)
+    # Pre-correct spelling typos in query before searching or generating responses
+    corrected_msg = rag_engine.correct_query(msg)
+
+    # Search RAG (fetch up to top 2 matches) using corrected query
+    matches = rag_engine.search_multiple(corrected_msg, limit=2)
     
     if matches:
         context_parts = []
@@ -435,14 +438,14 @@ async def stateless_chat_stream(req: ChatRequest):
         effective_api_key = req.api_key or os.environ.get("OPENAI_API_KEY")
         if effective_api_key:
             return StreamingResponse(
-                stateless_openai_generator(msg, effective_api_key, context_text),
+                stateless_openai_generator(corrected_msg, effective_api_key, context_text),
                 media_type="text/event-stream"
             )
     elif provider == "gemini":
         effective_api_key = req.api_key or os.environ.get("GEMINI_API_KEY")
         if effective_api_key:
             return StreamingResponse(
-                stateless_gemini_generator(msg, effective_api_key, context_text),
+                stateless_gemini_generator(corrected_msg, effective_api_key, context_text),
                 media_type="text/event-stream"
             )
             

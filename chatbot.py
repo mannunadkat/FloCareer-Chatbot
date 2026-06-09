@@ -431,8 +431,11 @@ def main():
                     # Keep active_category so user can pick more from the same menu
 
             # --- NORMAL FLOW: RAG search + LLM/local ---
+            # Pre-correct spelling typos in query before searching or generating responses
+            corrected_query = rag_engine.correct_query(query)
+
             # 1. Search RAG (fetch up to top 2 matches)
-            matches = rag_engine.search_multiple(query, limit=2)
+            matches = rag_engine.search_multiple(corrected_query, limit=2)
             
             # 2. Get Context
             if matches:
@@ -448,9 +451,9 @@ def main():
             # 3. Call Online APIs if enabled, otherwise fallback to local
             response_text = None
             if openai_key:
-                response_text = stream_openai_response(openai_key, context_text, history, query)
+                response_text = stream_openai_response(openai_key, context_text, history, corrected_query)
             elif gemini_key:
-                response_text = stream_gemini_response(gemini_key, context_text, history, query)
+                response_text = stream_gemini_response(gemini_key, context_text, history, corrected_query)
             
             if response_text is None:
                 response_text = stream_local_response(matched_answer)

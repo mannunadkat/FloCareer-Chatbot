@@ -9,6 +9,15 @@ load_dotenv()
 
 KB_PATH = os.path.join(os.path.dirname(__file__), "knowledge_base.md")
 
+STOPWORDS = {
+    "a", "an", "the", "and", "or", "but", "if", "then", "else", "when", 
+    "at", "by", "from", "for", "in", "out", "on", "to", "with", "is", "am", 
+    "are", "was", "were", "be", "been", "being", "have", "has", "had", 
+    "do", "does", "did", "i", "you", "he", "she", "it", "we", "they", "my", "your",
+    # Negations & Contractions to avoid positive word corrections (e.g. cant -> can)
+    "cant", "dont", "wont", "shouldnt", "isnt", "didnt", "cannot", "couldnt", "wouldnt", "havent", "hasnt", "hadnt"
+}
+
 class RAGEngine:
     def __init__(self):
         self.entries = []
@@ -228,30 +237,65 @@ class RAGEngine:
                 min_dist = dist
                 best_word = vocab_word
             elif dist == min_dist and best_word is not None:
-                if len(vocab_word) < len(best_word):
+                # Tie-breakers:
+                # 1. Prefer vocab word with more character overlap (common in spelling variants)
+                vocab_overlap = len(set(word).intersection(set(vocab_word)))
+                best_overlap = len(set(word).intersection(set(best_word)))
+                if vocab_overlap > best_overlap:
                     best_word = vocab_word
+                elif vocab_overlap == best_overlap:
+                    # 2. Prefer shorter word
+                    if len(vocab_word) < len(best_word):
+                        best_word = vocab_word
                 
         max_allowed = 1 if len(word) <= 6 else 2
         if min_dist <= max_allowed:
             return best_word
         return None
 
-    def _tokenize(self, text, is_query=False):
-        # Filter out common stop words
-        stopwords = {
-            "a", "an", "the", "and", "or", "but", "if", "then", "else", "when", 
-            "at", "by", "from", "for", "in", "out", "on", "to", "with", "is", "am", 
-            "are", "was", "were", "be", "been", "being", "have", "has", "had", 
-            "do", "does", "did", "i", "you", "he", "she", "it", "we", "they", "my", "your"
-        }
+    def correct_query(self, query):
+        words = re.findall(r"\b\w+\b", query)
+        
+        corrected_words = []
+        for w in words:
+            w_lower = w.lower()
+            if w_lower in STOPWORDS or w_lower in self.vocabulary or w_lower.isdigit():
+                corrected_words.append(w)
+            else:
+                closest = self._find_closest_vocab_word(w_lower)
+                if closest:
+                    if w.isupper():
+                        corrected_words.append(closest.upper())
+                    elif w[0].isupper() if w else False:
+                        corrected_words.append(closest.capitalize())
+                    else:
+                        corrected_words.append(closest)
+                else:
+                    corrected_words.append(w)
+                    
+        # Reconstruct query while keeping punctuation and spacing
+        parts = re.split(r"(\b\w+\b)", query)
+        new_parts = []
+        word_idx = 0
+        for part in parts:
+            if re.match(r"^\w+$", part):
+                if word_idx < len(corrected_words):
+                    new_parts.append(corrected_words[word_idx])
+                    word_idx += 1
+                else:
+                    new_parts.append(part)
+            else:
+                new_parts.append(part)
+        return "".join(new_parts)
 
+    def _tokenize(self, text, is_query=False):
         # Convert to lowercase and extract words
         words = re.findall(r"\b\w+\b", text.lower())
         
         if is_query and hasattr(self, "vocabulary") and self.vocabulary:
             corrected_words = []
             for w in words:
-                if w in stopwords or w in self.vocabulary or w.isdigit():
+                if w in STOPWORDS or w in self.vocabulary or w.isdigit():
                     corrected_words.append(w)
                 else:
                     closest = self._find_closest_vocab_word(w)
@@ -289,7 +333,7 @@ class RAGEngine:
             if w in synonyms:
                 expanded_words.extend(synonyms[w])
                 
-        return [w for w in expanded_words if w not in stopwords]
+        return [w for w in expanded_words if w not in STOPWORDS]
 
     def search(self, query, threshold=0.15):
         results = self.search_multiple(query, threshold=threshold, limit=1)
@@ -345,7 +389,7 @@ class RAGEngine:
             keyword_score += len(q_intersection) * 0.15
 
             # Boost score for specific technical keyword matches
-            tech_keywords = ["camera", "mic", "microphone", "audio", "voice", "volume", "editor", "join", "blank", "error", "payment", "delete", "reschedule", "cancel", "103", "104", "nivo", "ats"]
+            tech_keywords = ["camera", "mic", "microphone", "audio", "voice", "volume", "editor", "join", "blank", "error", "payment", "delete", "reschedule", "cancel", "103", "104", "nivo", "ats", "video", "feed"]
             for kw in tech_keywords:
                 if kw in query_tokens and kw in entry_tokens:
                     keyword_score += 0.15
@@ -368,12 +412,19 @@ class RAGEngine:
         scored_entries.sort(key=lambda x: x[0], reverse=True)
 
         results = []
-        for score, entry in scored_entries[:limit]:
+        seen_questions = set()
+        for score, entry in scored_entries:
+            norm_q = entry["question"].strip().lower()
+            if norm_q in seen_questions:
+                continue
+            seen_questions.add(norm_q)
             results.append({
                 "question": entry["question"],
                 "answer": entry["answer"],
                 "score": score
             })
+            if len(results) >= limit:
+                break
         return results
 
 # Singleton instance
