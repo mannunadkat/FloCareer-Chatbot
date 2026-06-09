@@ -6,6 +6,7 @@ KB_PATH = os.path.join(os.path.dirname(__file__), "knowledge_base.md")
 class RAGEngine:
     def __init__(self):
         self.entries = []
+        self.vocabulary = set()
         self.load_kb()
 
     def load_kb(self):
@@ -17,6 +18,9 @@ class RAGEngine:
 
         # Split entries by "#### Entry"
         raw_entries = content.split("#### Entry")
+        
+        self.vocabulary = set()
+        temp_entries = []
         
         for raw_entry in raw_entries[1:]:
             lines = raw_entry.strip().split("\n")
@@ -73,17 +77,92 @@ class RAGEngine:
                     break
 
             if question and answer:
-                self.entries.append({
-                    "question": question,
-                    "answer": answer,
-                    "tokens": self._tokenize(question),
-                    "answer_tokens": self._tokenize(answer)
-                })
+                temp_entries.append((question, answer))
 
-    def _tokenize(self, text):
+        # First pass: tokenize to build full vocabulary
+        for question, answer in temp_entries:
+            q_tokens = self._tokenize(question, is_query=False)
+            a_tokens = self._tokenize(answer, is_query=False)
+            self.vocabulary.update(q_tokens)
+            self.vocabulary.update(a_tokens)
+            
+            self.entries.append({
+                "question": question,
+                "answer": answer,
+                "tokens": q_tokens,
+                "answer_tokens": a_tokens
+            })
+
+    def _damerau_levenshtein_distance(self, s1, s2):
+        # Dynamic programming with transposition
+        d = {}
+        for i in range(-1, len(s1) + 1):
+            d[(i, -1)] = i + 1
+        for j in range(-1, len(s2) + 1):
+            d[(-1, j)] = j + 1
+
+        for i in range(len(s1)):
+            for j in range(len(s2)):
+                cost = 0 if s1[i] == s2[j] else 1
+                d[(i, j)] = min(
+                    d[(i - 1, j)] + 1,        # deletion
+                    d[(i, j - 1)] + 1,        # insertion
+                    d[(i - 1, j - 1)] + cost  # substitution
+                )
+                if i > 0 and j > 0 and s1[i] == s2[j - 1] and s1[i - 1] == s2[j]:
+                    d[(i, j)] = min(d[(i, j)], d[(i - 2, j - 2)] + 0.75) # cost of transposition is 0.75
+
+        return d[(len(s1) - 1, len(s2) - 1)]
+
+    def _find_closest_vocab_word(self, word):
+        if len(word) < 3:
+            return None
+            
+        best_word = None
+        min_dist = 999
+        
+        for vocab_word in self.vocabulary:
+            if abs(len(word) - len(vocab_word)) > 2:
+                continue
+            dist = self._damerau_levenshtein_distance(word, vocab_word)
+            if dist < min_dist:
+                min_dist = dist
+                best_word = vocab_word
+            elif dist == min_dist and best_word is not None:
+                # Tie-breaker: prefer the shorter word (usually the singular root)
+                if len(vocab_word) < len(best_word):
+                    best_word = vocab_word
+                
+        max_allowed = 1 if len(word) <= 6 else 2
+        if min_dist <= max_allowed:
+            return best_word
+        return None
+
+    def _tokenize(self, text, is_query=False):
+        # Filter out common stop words
+        stopwords = {
+            "a", "an", "the", "and", "or", "but", "if", "then", "else", "when", 
+            "at", "by", "from", "for", "in", "out", "on", "to", "with", "is", "am", 
+            "are", "was", "were", "be", "been", "being", "have", "has", "had", 
+            "do", "does", "did", "i", "you", "he", "she", "it", "we", "they", "my", "your"
+        }
+
         # Convert to lowercase and extract words
         words = re.findall(r"\b\w+\b", text.lower())
         
+        if is_query and hasattr(self, "vocabulary") and self.vocabulary:
+            corrected_words = []
+            for w in words:
+                if w in stopwords or w in self.vocabulary or w.isdigit():
+                    corrected_words.append(w)
+                else:
+                    closest = self._find_closest_vocab_word(w)
+                    if closest:
+                        corrected_words.append(closest)
+                    else:
+                        corrected_words.append(w)
+            words = corrected_words
+
         # Synonym mappings for recruiting, abbreviations, and related terms
         synonyms = {
             "fb": ["feedback"],
@@ -112,13 +191,6 @@ class RAGEngine:
             if w in synonyms:
                 expanded_words.extend(synonyms[w])
                 
-        # Filter out common stop words
-        stopwords = {
-            "a", "an", "the", "and", "or", "but", "if", "then", "else", "when", 
-            "at", "by", "from", "for", "in", "out", "on", "to", "with", "is", "am", 
-            "are", "was", "were", "be", "been", "being", "have", "has", "had", 
-            "do", "does", "did", "i", "you", "he", "she", "it", "we", "they", "my", "your"
-        }
         return [w for w in expanded_words if w not in stopwords]
 
     def search(self, query, threshold=0.15):
@@ -126,7 +198,7 @@ class RAGEngine:
         return results[0] if results else None
 
     def search_multiple(self, query, threshold=0.15, limit=2):
-        query_tokens = self._tokenize(query)
+        query_tokens = self._tokenize(query, is_query=True)
         if not query_tokens:
             return []
 

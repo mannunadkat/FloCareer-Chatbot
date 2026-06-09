@@ -23,6 +23,30 @@ COLOR_WARNING = "\033[1;33m"  # Bold Yellow
 # Strict Anti-Hallucination System Instruction
 SYSTEM_INSTRUCTION = (
     "You are FloCareer AI Assistant.\n\n"
+    "## INTENT INTERPRETATION RULE (Run this BEFORE checking the knowledge base):\n\n"
+    "Step 1 — Normalize the user's query:\n"
+    "Before doing anything else, internally correct any obvious typos, "
+    "misspellings, shorthand, or phonetic errors in the user's message "
+    "to determine their most likely intended meaning.\n"
+    "Examples:\n"
+    "- \"mci\", \"mick\", \"micc\" -> microphone / mic\n"
+    "- \"cam\", \"cemra\", \"camra\" -> camera\n"
+    "- \"intervew\", \"interviu\" -> interview\n"
+    "- \"schedual\", \"sched\" -> schedule\n"
+    "- \"cant here u\" -> can't hear you\n"
+    "- \"audio nt werkng\" -> audio not working\n\n"
+    "Step 2 — Check the knowledge base using the INTERPRETED meaning:\n"
+    "Always search the knowledge base using the corrected/interpreted query, "
+    "not the literal typed text.\n\n"
+    "Step 3 — Respond or fallback:\n"
+    "- If the interpreted topic EXISTS in the knowledge base -> answer it normally.\n"
+    "- If you corrected a typo, optionally prefix your answer with:\n"
+    "  \"It looks like you meant [X] — here's what I found:\"\n"
+    "- If the interpreted topic does NOT exist in the knowledge base even "
+    "after correction -> only then respond with the fallback message.\n\n"
+    "IMPORTANT: This rule does NOT allow answering from outside the knowledge "
+    "base. Typo correction only helps you find the right topic IN the knowledge "
+    "base. Hallucination is still strictly not allowed.\n\n"
     "## ABSOLUTE RULES — DO NOT BREAK THESE:\n\n"
     "1. You may ONLY answer using the retrieved context provided in the user message under 'Context:'.\n"
     "2. If the context says 'No matching FAQ entries found' or the context does not contain relevant information "
@@ -270,7 +294,62 @@ GREETING_WORDS = {"hi", "hello", "hey", "hola", "yo", "sup", "good morning", "go
 
 def is_greeting(text):
     cleaned = text.lower().strip().rstrip("!.,?")
-    return cleaned in GREETING_WORDS
+    if not cleaned:
+        return False
+        
+    if cleaned in GREETING_WORDS:
+        return True
+        
+    # Collapse repeating characters, e.g. heyyyy -> hey, helloooo -> helloo
+    collapsed = re.sub(r'(.)\1+', r'\1', cleaned)
+    collapsed_two = re.sub(r'(.)\1\1+', r'\1\1', cleaned)
+    if collapsed in GREETING_WORDS or collapsed_two in GREETING_WORDS:
+        return True
+        
+    # Extract words to run fuzzy distance checks
+    words = re.findall(r"\b\w+\b", cleaned)
+    if not words:
+        return False
+        
+    def local_lev_dist(s1, s2):
+        if len(s1) < len(s2):
+            return local_lev_dist(s2, s1)
+        if len(s2) == 0:
+            return len(s1)
+        prev = range(len(s2) + 1)
+        for i, c1 in enumerate(s1):
+            curr = [i + 1]
+            for j, c2 in enumerate(s2):
+                curr.append(min(prev[j + 1] + 1, curr[j] + 1, prev[j] + (c1 != c2)))
+            prev = curr
+        return prev[-1]
+        
+    for word in words:
+        for greet in GREETING_WORDS:
+            # Check if word starts with a greeting root (e.g. heyyylooo starts with hey)
+            if len(greet) >= 3 and word.startswith(greet):
+                return True
+                
+            dist = local_lev_dist(word, greet)
+            max_dist = 0
+            if len(greet) > 5:
+                max_dist = 2
+            elif len(greet) >= 3:
+                max_dist = 1
+                
+            if dist <= max_dist:
+                return True
+    return False
+
+def is_appreciation(text):
+    cleaned = text.lower().strip().rstrip("!.,?")
+    appreciation_roots = {"thanks", "thank you", "thank u", "thx", "ty", "tanks", "appreciate", "appreciate it"}
+    for root in appreciation_roots:
+        if cleaned == root or cleaned == f"ok {root}" or cleaned == f"okay {root}" or cleaned == f"perfect {root}" or cleaned == f"great {root}":
+            return True
+        if cleaned in {f"{root} so much", f"{root} very much", f"ok {root} so much", f"okay {root} so much"}:
+            return True
+    return False
 
 def show_category_menu():
     print(f"\n{COLOR_TEXT}Hey there! 👋 Welcome to FloCareer Support.\n")
@@ -319,6 +398,10 @@ def main():
             
             if query.lower() in ["exit", "quit"]:
                 print(f"\n{COLOR_PRIMARY}Goodbye! Thank you for using FloCareer Support.{COLOR_RESET}")
+                break
+
+            if is_appreciation(query):
+                print(f"You're welcome! Glad I could help. Goodbye! 😊")
                 break
 
             print(f"{COLOR_PRIMARY}FloCareer AI:{COLOR_RESET} ", end="")
