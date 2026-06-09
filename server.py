@@ -466,6 +466,11 @@ async def stateless_chat_stream(req: ChatRequest):
         cat_questions = CATEGORIES[active_cat]["questions"]
         if 0 <= letter_idx < len(cat_questions):
             msg = cat_questions[letter_idx][1]
+        else:
+            return StreamingResponse(
+                instant_text_generator("Please select from the options above."),
+                media_type="text/event-stream"
+            )
 
     # --- NORMAL FLOW: Search RAG ---
     # Pre-correct spelling typos in query before searching or generating responses

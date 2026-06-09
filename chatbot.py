@@ -480,6 +480,10 @@ def main():
                     _, search_query = cat_questions[letter_idx]
                     query = search_query  # Override query for RAG search
                     # Keep active_category so user can pick more from the same menu
+                else:
+                    print("Please select from the options above.")
+                    print()
+                    continue
 
             # --- NORMAL FLOW: RAG search + LLM/local ---
             # Pre-correct spelling typos in query before searching or generating responses
