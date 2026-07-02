@@ -16,8 +16,18 @@ STOPWORDS = {
     "at", "by", "from", "for", "in", "out", "on", "to", "with", "is", "am", 
     "are", "was", "were", "be", "been", "being", "have", "has", "had", 
     "do", "does", "did", "i", "you", "he", "she", "it", "we", "they", "my", "your",
+    "what", "who", "where", "why", "how", "which", "whose", "whom", "whether",
+    "would", "should", "could", "can", "will", "shall", "may", "might",
     # Negations & Contractions to avoid positive word corrections (e.g. cant -> can)
     "cant", "dont", "wont", "shouldnt", "isnt", "didnt", "cannot", "couldnt", "wouldnt", "havent", "hasnt", "hadnt"
+}
+
+EXCLUDE_FROM_CORRECTION = {
+    "weather", "sports", "news", "today", "tomorrow", "yesterday", "tdy",
+    "what", "who", "where", "why", "how", "which", "whose", "whom", "whether",
+    "code", "java", "python", "c", "c++", "javascript", "rust", "go",
+    "music", "movie", "food", "restaurant", "flight", "hotel", "hello", "hi", "hey",
+    "neither", "either", "both"
 }
 
 class RAGEngine:
@@ -189,7 +199,7 @@ class RAGEngine:
                     if len(vocab_word) < len(best_word):
                         best_word = vocab_word
                 
-        max_allowed = 1 if len(word) <= 6 else 2
+        max_allowed = 1 if len(word) <= 8 else 2
         if min_dist <= max_allowed:
             return best_word
         return None
@@ -204,15 +214,22 @@ class RAGEngine:
             "camra": "camera",
             "cemra": "camera",
             "cma": "camera",
+            "cmra": "camera",
             "intervew": "interview",
             "interviu": "interview",
             "schedual": "schedule",
+            "tdy": "today",
+            "microfone": "microphone",
+            "mcrphone": "microphone",
+            "micrphone": "microphone",
         }
         
         corrected_words = []
         for w in words:
             w_lower = w.lower()
-            if w_lower in manual_corrections:
+            if w_lower in EXCLUDE_FROM_CORRECTION:
+                corrected_words.append(w)
+            elif w_lower in manual_corrections:
                 closest = manual_corrections[w_lower]
                 if w.isupper():
                     corrected_words.append(closest.upper())
@@ -367,7 +384,11 @@ class RAGEngine:
 
             # Blend with semantic score
             if sem_score > 0.4:
-                score = keyword_score + (sem_score - 0.4) * 1.5
+                if keyword_score > 0.0:
+                    score = keyword_score + (sem_score - 0.4) * 1.5
+                else:
+                    # If NO keyword overlap at all (excluding stopwords), only trust extremely high semantic similarity
+                    score = sem_score if sem_score > 0.75 else 0.0
             else:
                 score = keyword_score
 

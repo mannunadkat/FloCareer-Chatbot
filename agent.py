@@ -260,6 +260,29 @@ def is_correction(text: str) -> bool:
             return True
     return False
 
+def is_out_of_scope(text: str) -> bool:
+    cleaned = text.lower().strip()
+    out_of_scope_patterns = [
+        r"\bweather\b",
+        r"\bsports?\b",
+        r"\bfootball\b",
+        r"\bcricket\b",
+        r"\bcooking\b",
+        r"\brecipe\b",
+        r"\bjoke\b",
+        r"\bmovie\b",
+        r"\bsong\b",
+        r"\bnews\b",
+        r"\bflights?\b",
+        r"\bhotels?\b",
+        r"\bwhat is 2 \+ 2\b",
+        r"\bcalculator\b"
+    ]
+    for pattern in out_of_scope_patterns:
+        if re.search(pattern, cleaned):
+            return True
+    return False
+
 def build_category_menu_text() -> str:
     lines = ["Hey there! 👋 Welcome to FloCareer Support.\n\nYou can ask me anything, or pick a category:\n"]
     for num, cat in CATEGORIES.items():
@@ -428,8 +451,13 @@ def generate_llm_response_node(state: AgentState) -> Dict[str, Any]:
 def fallback_local_node(state: AgentState) -> Dict[str, Any]:
     matched_answer = state.get("matched_answer")
     is_corr = state["is_correction"]
+    query = state["query"]
     
-    fallback_res = matched_answer if matched_answer else "I don't have information about that in the FloCareer knowledge base. Please reach out to FloCareer support for further assistance."
+    if not matched_answer and is_out_of_scope(query):
+        fallback_res = "I can only assist with FloCareer-related questions."
+    else:
+        fallback_res = matched_answer if matched_answer else "I don't have information about that in the FloCareer knowledge base. Please reach out to FloCareer support for further assistance."
+        
     if is_corr:
         fallback_res = "Apologies for the misunderstanding! " + fallback_res
         

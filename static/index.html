@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FloCareer AI Assistant</title>
+    <!-- Google Fonts: Serif for headings, Sans-serif for UI -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Markdown Parser CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- Authentication Overlay Screen -->
+    <div id="auth-screen" class="auth-screen">
+        <div class="auth-card glass-panel">
+            <div class="auth-header">
+                <div class="brand-logo">
+                    <i data-lucide="sparkles" class="logo-icon animate-pulse"></i>
+                </div>
+                <h1>FloCareer Support AI</h1>
+                <p>Sign in to connect with the smart technical & operational assistant.</p>
+            </div>
+            
+            <form id="auth-form" class="auth-form">
+                <div class="input-group">
+                    <label for="auth-email">Work Email</label>
+                    <div class="input-wrapper">
+                        <i data-lucide="mail" class="field-icon"></i>
+                        <input type="email" id="auth-email" required placeholder="name@company.com">
+                    </div>
+                </div>
+                
+                <div class="input-group">
+                    <label for="auth-role">Your Role</label>
+                    <div class="input-wrapper">
+                        <i data-lucide="briefcase" class="field-icon"></i>
+                        <select id="auth-role" required>
+                            <option value="" disabled selected>Select your portal access</option>
+                            <option value="Candidate">Candidate / Job Seeker</option>
+                            <option value="Interviewer">Independent Interviewer / Panelist</option>
+                            <option value="Recruiter">Recruiter / Client HR Manager</option>
+                            <option value="Technical Admin">Internal Operations / Support Admin</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-primary auth-submit">
+                    <span>Enter Assistant Portal</span>
+                    <i data-lucide="arrow-right"></i>
+                </button>
+            </form>
+            
+            <div class="auth-footer">
+                <p>By proceeding, you gain instant access to technical support, device testing FAQs, scheduling, and portal guidelines.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Dashboard Application Container -->
+    <div id="app-container" class="app-container hidden">
+        
+        <!-- Left Sidebar: Category & FAQ Tree -->
+        <aside class="sidebar-left glass-panel">
+            <div class="sidebar-header">
+                <div class="brand-logo-small">
+                    <i data-lucide="sparkles" class="logo-icon-small"></i>
+                    <h2>FloCareer AI</h2>
+                </div>
+                <button id="sidebar-toggle-close" class="mobile-only-btn">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            
+            <!-- Guided FAQ Search Bar -->
+            <div class="sidebar-search-container">
+                <div class="sidebar-search-wrapper">
+                    <i data-lucide="search" class="sidebar-search-icon"></i>
+                    <input type="text" id="sidebar-search" placeholder="Search guided FAQs...">
+                    <button type="button" id="clear-sidebar-search" class="clear-search-btn hidden" title="Clear Search">
+                        <i data-lucide="x"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="sidebar-scroll">
+                <div class="section-title">GUIDED FAQ CATEGORIES</div>
+                
+                <div class="categories-list">
+                    <!-- Category 1 -->
+                    <div class="category-item" data-category-id="1">
+                        <button class="category-trigger">
+                            <span class="trigger-label">
+                                <i data-lucide="monitor" class="cat-icon"></i>
+                                <span>1. Technical Issues</span>
+                            </span>
+                            <i data-lucide="chevron-down" class="chevron"></i>
+                        </button>
+                        <div class="category-content">
+                            <button type="button" class="faq-question" data-query="Unable to switch on camera">Unable to switch camera</button>
+                            <button type="button" class="faq-question" data-query="Unable to switch on microphone">Unable to switch microphone</button>
+                            <button type="button" class="faq-question" data-query="Not able to find or click on Join button">No Join button found</button>
+                            <button type="button" class="faq-question" data-query="Getting blank page in interview room">Getting a blank page</button>
+                            <button type="button" class="faq-question" data-query="Panel/Candidate not able to hear the voice">Audio/hearing issues</button>
+                            <button type="button" class="faq-question" data-query="Error code #103 or #104">Error #103 / #104</button>
+                        </div>
+                    </div>
+
+                    <!-- Category 2 -->
+                    <div class="category-item" data-category-id="2">
+                        <button class="category-trigger">
+                            <span class="trigger-label">
+                                <i data-lucide="user-check" class="cat-icon"></i>
+                                <span>2. Candidate Support</span>
+                            </span>
+                            <i data-lucide="chevron-down" class="chevron"></i>
+                        </button>
+                        <div class="category-content">
+                            <button type="button" class="faq-question" data-query="Candidate unable to open R1/R2 link">Unable to open R1/R2 link</button>
+                            <button type="button" class="faq-question" data-query="Candidate completed interview but status still shows pending">Status shows pending after completion</button>
+                            <button type="button" class="faq-question" data-query="Interview screen stuck">Interview screen stuck</button>
+                            <button type="button" class="faq-question" data-query="Candidate didn't receive interview link">Missing interview link</button>
+                            <button type="button" class="faq-question" data-query="Device check before interview">Device pre-check instructions</button>
+                        </div>
+                    </div>
+
+                    <!-- Category 3 -->
+                    <div class="category-item" data-category-id="3">
+                        <button class="category-trigger">
+                            <span class="trigger-label">
+                                <i data-lucide="award" class="cat-icon"></i>
+                                <span>3. Interviewers / Panelists</span>
+                            </span>
+                            <i data-lucide="chevron-down" class="chevron"></i>
+                        </button>
+                        <div class="category-content">
+                            <button type="button" class="faq-question" data-query="When will I be paid as an interviewer?">When will I get paid?</button>
+                            <button type="button" class="faq-question" data-query="How do I join FloCareer as an interviewer?">How to join as interviewer</button>
+                            <button type="button" class="faq-question" data-query="How do I update my availability?">How to update availability</button>
+                            <button type="button" class="faq-question" data-query="Where can I view my interview payments?">Where to view payments</button>
+                            <button type="button" class="faq-question" data-query="How to edit submitted feedback?">How to edit submitted feedback</button>
+                            <button type="button" class="faq-question" data-query="What if I cannot attend a scheduled interview?">Unable to attend scheduling</button>
+                        </div>
+                    </div>
+
+                    <!-- Category 4 -->
+                    <div class="category-item" data-category-id="4">
+                        <button class="category-trigger">
+                            <span class="trigger-label">
+                                <i data-lucide="users" class="cat-icon"></i>
+                                <span>4. Recruiter Help</span>
+                            </span>
+                            <i data-lucide="chevron-down" class="chevron"></i>
+                        </button>
+                        <div class="category-content">
+                            <button type="button" class="faq-question" data-query="How to reschedule an interview?">Reschedule an interview</button>
+                            <button type="button" class="faq-question" data-query="How to cancel an interview?">Cancel an interview</button>
+                            <button type="button" class="faq-question" data-query="How to upload bulk profiles?">Upload bulk candidate profiles</button>
+                            <button type="button" class="faq-question" data-query="How to download candidate feedback/report?">Download candidate feedback report</button>
+                            <button type="button" class="faq-question" data-query="Candidate duplicate profile error">Duplicate profile error fix</button>
+                        </div>
+                    </div>
+
+                    <!-- Category 5 -->
+                    <div class="category-item" data-category-id="5">
+                        <button class="category-trigger">
+                            <span class="trigger-label">
+                                <i data-lucide="help-circle" class="cat-icon"></i>
+                                <span>5. Platform Overview</span>
+                            </span>
+                            <i data-lucide="chevron-down" class="chevron"></i>
+                        </button>
+                        <div class="category-content">
+                            <button type="button" class="faq-question" data-query="What is FloCareer?">What is FloCareer?</button>
+                            <button type="button" class="faq-question" data-query="AI-driven vs expert-led interviews — what's the difference?">AI vs Expert-led interviews</button>
+                            <button type="button" class="faq-question" data-query="Can FloCareer integrate with my ATS?">ATS integration capability</button>
+                            <button type="button" class="faq-question" data-query="How does FloCareer keep interviews secure and fair?">Interview security and fairness</button>
+                        </div>
+                    </div>
+
+                    <!-- Category 6 -->
+                    <div class="category-item" data-category-id="6">
+                        <button class="category-trigger">
+                            <span class="trigger-label">
+                                <i data-lucide="credit-card" class="cat-icon"></i>
+                                <span>6. Pricing & Plans</span>
+                            </span>
+                            <i data-lucide="chevron-down" class="chevron"></i>
+                        </button>
+                        <div class="category-content">
+                            <button type="button" class="faq-question" data-query="How is Interview-as-a-Service priced?">IaaS pricing details</button>
+                            <button type="button" class="faq-question" data-query="How is the AI Interview Platform priced?">AI Interview Platform pricing</button>
+                            <button type="button" class="faq-question" data-query="Is there a minimum commitment or long-term contract?">Contract minimum commitments</button>
+                            <button type="button" class="faq-question" data-query="Do you offer pilots or free trials?">Pilots or free trials support</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sidebar-left-footer">
+                <button id="logout-btn" class="btn-text">
+                    <i data-lucide="log-out"></i>
+                    <span>Sign Out</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Center: Chat Portal Area -->
+        <main class="chat-main">
+            <!-- Top Chat Header -->
+            <header class="chat-header glass-panel">
+                <div class="header-left">
+                    <button id="sidebar-toggle-open" class="mobile-only-btn header-btn">
+                        <i data-lucide="menu"></i>
+                    </button>
+                    <div class="status-indicator">
+                        <span id="connection-dot" class="dot dot-online"></span>
+                        <span id="connection-status">Connected to FloCareer Agent</span>
+                    </div>
+                </div>
+                
+                <div class="header-right">
+                    <button id="clear-chat-btn" class="header-btn" title="Clear Chat History">
+                        <i data-lucide="trash-2"></i>
+                        <span class="desktop-only">Clear</span>
+                    </button>
+                    <button id="theme-toggle-btn" class="header-btn" title="Toggle Theme">
+                        <i data-lucide="sun" id="theme-icon"></i>
+                    </button>
+                    <button id="settings-toggle-btn" class="header-btn" title="Configure LLM & Keys">
+                        <i data-lucide="sliders"></i>
+                        <span class="desktop-only">Config</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Message Feed Viewport -->
+            <div class="chat-viewport" id="chat-viewport">
+                <!-- Welcome/Empty State -->
+                <div class="empty-state" id="empty-state">
+                    <div class="empty-icon-wrapper">
+                        <i data-lucide="bot" class="empty-bot-icon"></i>
+                    </div>
+                    <h2>How can I help with your FloCareer experience today?</h2>
+                    <p class="subtitle">I'm connected to the live knowledge base. Select a guided FAQ from the sidebar or type your query below.</p>
+                    
+                    <div class="suggestion-chips">
+                        <button class="chip-btn" data-query="Unable to switch on camera">
+                            <i data-lucide="video-off"></i>
+                            <span>Camera Troubleshooting</span>
+                        </button>
+                        <button class="chip-btn" data-query="How to reschedule an interview?">
+                            <i data-lucide="calendar"></i>
+                            <span>Reschedule Process</span>
+                        </button>
+                        <button class="chip-btn" data-query="When will I be paid as an interviewer?">
+                            <i data-lucide="dollar-sign"></i>
+                            <span>Interviewer Payments</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="messages-container" class="messages-container">
+                    <!-- Dynamic Messages will load here -->
+                </div>
+            </div>
+
+            <!-- Bottom Chat Input Panel -->
+            <div class="input-panel-container">
+                <form id="chat-form" class="chat-form">
+                    <div class="chat-input-wrapper glass-panel">
+                        <textarea 
+                            id="chat-input" 
+                            placeholder="Ask a question about FloCareer features, integrations, or resolve technical interview bugs..." 
+                            rows="1"
+                            required
+                        ></textarea>
+                        <div class="input-actions">
+                            <span id="active-category-badge" class="active-category-badge hidden">
+                                <i data-lucide="tag"></i>
+                                <span id="active-category-name">Technical</span>
+                                <button type="button" id="clear-category-badge"><i data-lucide="x"></i></button>
+                            </span>
+                            <div class="input-buttons-right">
+                                <button type="submit" class="btn-send" id="btn-send" title="Send Message">
+                                    <i data-lucide="arrow-up"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+                <div class="chat-footer-note">
+                    FloCareer Support AI uses authenticated context verification to prevent hallucinations.
+                </div>
+            </div>
+        </main>
+
+        <!-- Right Panel: Configurations & User Stats -->
+        <aside class="sidebar-right glass-panel hidden" id="sidebar-right">
+            <div class="sidebar-right-header">
+                <h3>Settings & Profile</h3>
+                <button id="sidebar-right-close" class="header-btn">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            
+            <div class="sidebar-right-content">
+                <!-- User Profile Section -->
+                <div class="config-section">
+                    <div class="config-section-title">Current Profile</div>
+                    <div class="profile-card">
+                        <div class="avatar-large" id="profile-avatar">FC</div>
+                        <div class="profile-info">
+                            <div class="profile-email" id="profile-email">name@company.com</div>
+                            <div class="profile-badge" id="profile-role">Recruiter</div>
+                        </div>
+                    </div>
+                    <div class="profile-stats">
+                        <div class="stat-item">
+                            <span class="stat-num" id="stat-queries">0</span>
+                            <span class="stat-label">Queries</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-num" id="stat-feedback">0</span>
+                            <span class="stat-label">Feedbacks</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LLM Settings -->
+                <div class="config-section">
+                    <div class="config-section-title">Model Provider</div>
+                    
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="provider" value="gemini" checked>
+                            <span class="radio-custom"></span>
+                            <span class="radio-text">Gemini (Google)</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="provider" value="openai">
+                            <span class="radio-custom"></span>
+                            <span class="radio-text">GPT-4o Mini (OpenAI)</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="provider" value="local">
+                            <span class="radio-custom"></span>
+                            <span class="radio-text">Local RAG (Offline)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- API Key Config -->
+                <div class="config-section" id="apikey-section">
+                    <div class="config-section-title">Custom API Key (Optional)</div>
+                    <p class="config-description">Leave blank to use the server's default `.env` API keys.</p>
+                    <div class="input-wrapper">
+                        <i data-lucide="key" class="field-icon"></i>
+                        <input type="password" id="custom-api-key" placeholder="Enter API Key override...">
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+    </div>
+
+    <!-- Feedback Modal Dialog -->
+    <div id="feedback-modal" class="modal-backdrop hidden">
+        <div class="modal-card glass-panel">
+            <div class="modal-header">
+                <div class="feedback-icon-title">
+                    <i data-lucide="message-square" class="icon-accent"></i>
+                    <h3>Help Us Improve the AI</h3>
+                </div>
+                <button id="feedback-modal-close" class="modal-close-btn">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            
+            <form id="feedback-form" class="feedback-form">
+                <div class="rating-summary">
+                    <span class="rating-label">Rating:</span>
+                    <span id="feedback-rating-badge" class="badge-positive">
+                        <i data-lucide="thumbs-up" class="badge-icon"></i>
+                        <span id="feedback-rating-text">Positive</span>
+                    </span>
+                </div>
+                
+                <div class="input-group">
+                    <label for="feedback-comment">What was helpful or what went wrong? (Optional)</label>
+                    <textarea 
+                        id="feedback-comment" 
+                        rows="4" 
+                        placeholder="Add comments on why this response was good/bad, specify typos, incorrect steps, or missing details..."
+                    ></textarea>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" id="feedback-cancel-btn">Cancel</button>
+                    <button type="submit" class="btn-primary" id="feedback-submit-btn">
+                        <span>Submit Feedback</span>
+                        <i data-lucide="send"></i>
+                    </button>
+                </div>
+            </form>
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
